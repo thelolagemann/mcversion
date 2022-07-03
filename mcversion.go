@@ -73,7 +73,7 @@ type VersionManifestV2 struct {
 }
 
 // ManifestVersionV2 like ManifestVersion, with the addition of
-// the SHA1 and compliance level fields.
+// the SHA1 and ComplianceLevel fields.
 type ManifestVersionV2 struct {
 	ManifestVersion
 	SHA1            []byte `json:"sha1"`

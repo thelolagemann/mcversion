@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"net/http"
 	url2 "net/url"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func generateTestData() error {
@@ -61,9 +63,17 @@ func generateTestData() error {
 
 type mockClient struct {
 	responses map[string][]byte
+	response  *http.Response
+	err       error
 }
 
 func (m *mockClient) Get(url string) (*http.Response, error) {
+	if m.response != nil {
+		return m.response, nil
+	}
+	if m.err != nil {
+		return nil, m.err
+	}
 	dec, err := url2.QueryUnescape(url)
 	if err != nil {
 		return nil, err
@@ -91,6 +101,13 @@ func (m *mockClient) loadResponses() error {
 	})
 }
 
+func (m *mockClient) doGet(res *http.Response, err error, f func() error) error {
+	m.response = res
+	m.err = err
+	defer func() { m.response = nil; m.err = nil }()
+	return f()
+}
+
 var (
 	clientMock = &mockClient{
 		responses: map[string][]byte{},
@@ -111,6 +128,48 @@ func init() {
 }
 
 func Test_MCVersion(t *testing.T) {
+	t.Run("getJSON", func(t *testing.T) {
+		t.Run("client_error", func(t *testing.T) {
+			testErr := fmt.Errorf("test error")
+			err := clientMock.doGet(nil, testErr, func() error {
+				_, err := Manifest()
+				return err
+			})
+			if err != testErr {
+				t.Errorf("expected error, got %v", err)
+			}
+		})
+		t.Run("network_error", func(t *testing.T) {
+			err := clientMock.doGet(&http.Response{StatusCode: 500}, nil, func() error {
+				_, err := Manifest()
+				return err
+			})
+			if err == nil {
+				t.Errorf("expected error")
+			}
+		})
+		t.Run("incorrect_header", func(t *testing.T) {
+			err := clientMock.doGet(&http.Response{Header: map[string][]string{"Content-Type": {"text/plain"}}}, nil, func() error {
+				_, err := Manifest()
+				return err
+			})
+			if err == nil {
+				t.Errorf("expected error")
+			}
+		})
+		t.Run("decode_error", func(t *testing.T) {
+			err := clientMock.doGet(&http.Response{
+				Header: map[string][]string{"Content-Type": {"application/json"}},
+				Body:   io.NopCloser(bytes.NewReader([]byte{})),
+			}, nil, func() error {
+				_, err := Manifest()
+				return err
+			})
+			if err == nil {
+				t.Errorf("expected error")
+			}
+		})
+	})
 	t.Run("Manifest", func(t *testing.T) {
 		m, err := Manifest()
 		if err != nil {
@@ -152,6 +211,17 @@ func Test_MCVersion(t *testing.T) {
 		if len(versions) != len(gManifest.Versions) {
 			t.Errorf("expected %d versions, got %d", len(gManifest.Versions), len(versions))
 		}
+		t.Run("PrematureError", func(t *testing.T) {
+			go func() {
+				time.Sleep(time.Millisecond)
+				gManifestErr = fmt.Errorf("test error")
+			}()
+			_, err := AllVersions()
+			if err == nil {
+				t.Error("expected error")
+			}
+			gManifestErr = nil
+		})
 		t.Run("VersionInfo", func(t *testing.T) {
 			for _, v := range versions {
 				vi, err := Version(v.ID)
