@@ -11,6 +11,11 @@ import (
 	"time"
 )
 
+const (
+	manifestURL   = "https://launchermeta.mojang.com/mc/game/version_manifest.json"
+	manifestV2URL = "https://launchermeta.mojang.com/mc/game/version_manifest_v2.json"
+)
+
 type client interface {
 	Get(url string) (*http.Response, error)
 }
@@ -55,6 +60,24 @@ type ManifestVersion struct {
 // also: Version.
 func (m ManifestVersion) Info() (VersionInfo, error) {
 	return Version(m.Id)
+}
+
+// VersionManifestV2 like VersionManifest, but includes the SHA1, and
+// compliance level in the Versions field.
+type VersionManifestV2 struct {
+	Latest struct {
+		Release  string `json:"release"`
+		Snapshot string `json:"snapshot"`
+	} `json:"latest"`
+	Versions []ManifestVersionV2 `json:"versions"`
+}
+
+// ManifestVersionV2 like ManifestVersion, with the addition of
+// the SHA1 and compliance level fields.
+type ManifestVersionV2 struct {
+	ManifestVersion
+	SHA1            []byte `json:"sha1"`
+	ComplianceLevel int    `json:"complianceLevel"`
 }
 
 // LatestRelease returns the latest release.
@@ -228,7 +251,15 @@ func Version(id string) (VersionInfo, error) {
 // Manifest returns the manifest of all versions.
 func Manifest() (VersionManifest, error) {
 	var versionManifest VersionManifest
-	err := getJSON("https://launchermeta.mojang.com/mc/game/version_manifest.json", &versionManifest)
+	err := getJSON(manifestURL, &versionManifest)
+	return versionManifest, err
+}
+
+// ManifestV2 like Manifest, but includes the SHA1, and
+// compliance level in the fields of each ManifestVersionV2.
+func ManifestV2() (VersionManifestV2, error) {
+	var versionManifest VersionManifestV2
+	err := getJSON(manifestV2URL, &versionManifest)
 	return versionManifest, err
 }
 

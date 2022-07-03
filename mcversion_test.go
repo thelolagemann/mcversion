@@ -30,6 +30,18 @@ func generateTestData() error {
 	if err := os.WriteFile("testdata/version_manifest.json", b, 0644); err != nil {
 		return err
 	}
+
+	manifestV2, err := ManifestV2()
+	if err != nil {
+		return err
+	}
+	b, err = json.Marshal(manifestV2)
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile("testdata/version_manifest_v2.json", b, 0644); err != nil {
+		return err
+	}
 	versions, err := manifest.AllVersions()
 	if err != nil {
 		return err
@@ -104,7 +116,6 @@ func Test_MCVersion(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to load manifest: %v", err)
 		}
-		// t.Log(m)
 		if len(m.Versions) == 0 {
 			t.Error("no versions found")
 		}
@@ -123,6 +134,15 @@ func Test_MCVersion(t *testing.T) {
 			}
 			gManifestErr = nil
 		})
+	})
+	t.Run("ManifestV2", func(t *testing.T) {
+		m, err := ManifestV2()
+		if err != nil {
+			t.Fatalf("failed to load manifest: %v", err)
+		}
+		if len(m.Versions) == 0 {
+			t.Error("no versions found")
+		}
 	})
 	t.Run("AllVersions", func(t *testing.T) {
 		versions, err := AllVersions()
@@ -176,6 +196,14 @@ func Benchmark_MCVersion(b *testing.B) {
 	b.Run("Manifest", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
 			_, err := Manifest()
+			if err != nil {
+				b.Fatal(err)
+			}
+		}
+	})
+	b.Run("ManifestV2", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			_, err := ManifestV2()
 			if err != nil {
 				b.Fatal(err)
 			}
