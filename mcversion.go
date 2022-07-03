@@ -12,8 +12,8 @@ import (
 )
 
 const (
-	manifestURL   = "https://launchermeta.mojang.com/mc/game/version_manifest.json"
-	manifestV2URL = "https://launchermeta.mojang.com/mc/game/version_manifest_v2.json"
+	manifestURL   = "https://piston-meta.mojang.com/mc/game/version_manifest.json"
+	manifestV2URL = "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"
 )
 
 type client interface {
