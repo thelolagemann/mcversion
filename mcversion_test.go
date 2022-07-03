@@ -68,11 +68,8 @@ type mockClient struct {
 }
 
 func (m *mockClient) Get(url string) (*http.Response, error) {
-	if m.response != nil {
-		return m.response, nil
-	}
-	if m.err != nil {
-		return nil, m.err
+	if m.response != nil || m.err != nil {
+		return m.response, m.err
 	}
 	dec, err := url2.QueryUnescape(url)
 	if err != nil {
