@@ -11,7 +11,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 )
 
 func generateTestData() error {
@@ -209,10 +208,7 @@ func Test_MCVersion(t *testing.T) {
 			t.Errorf("expected %d versions, got %d", len(gManifest.Versions), len(versions))
 		}
 		t.Run("PrematureError", func(t *testing.T) {
-			go func() {
-				time.Sleep(time.Millisecond)
-				gManifestErr = fmt.Errorf("test error")
-			}()
+			gManifestErr = fmt.Errorf("test error")
 			_, err := AllVersions()
 			if err == nil {
 				t.Error("expected error")
