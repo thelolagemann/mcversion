@@ -20,11 +20,12 @@ var (
 		Timeout: time.Second * 5,
 	}
 
-	gManifest = &VersionManifest{}
-
-	versionPool = &sync.Pool{
+	gManifest    = VersionManifest{}
+	isLoaded     bool
+	gManifestErr error
+	versionPool  = &sync.Pool{
 		New: func() interface{} {
-			return new(VersionInfo)
+			return VersionInfo{}
 		},
 	}
 )
@@ -35,12 +36,13 @@ type VersionManifest struct {
 		Release  string `json:"release"`
 		Snapshot string `json:"snapshot"`
 	} `json:"latest"`
-	Versions []*ManifestVersion `json:"versions"`
-
-	loaded bool
-	err    error
+	Versions []ManifestVersion `json:"versions"`
 }
 
+// ManifestVersion is a version in the manifest. In order to
+// get the VersionInfo, which contains extended information about
+// a specific version, call the Info method on the ManifestVersion,
+// or alternatively call the Version method with the specified ID.
 type ManifestVersion struct {
 	Id          string    `json:"id"`
 	Type        string    `json:"type"`
@@ -49,36 +51,43 @@ type ManifestVersion struct {
 	ReleaseTime time.Time `json:"releaseTime"`
 }
 
+// Info returns the VersionInfo for the calling ManifestVersion. See
+// also: Version.
+func (m ManifestVersion) Info() (VersionInfo, error) {
+	return Version(m.Id)
+}
+
 // LatestRelease returns the latest release.
-func (vM *VersionManifest) LatestRelease() (*VersionInfo, error) {
+func (vM VersionManifest) LatestRelease() (VersionInfo, error) {
 	return vM.Version(vM.Latest.Release)
 }
 
 // LatestSnapshot returns the latest snapshot.
-func (vM *VersionManifest) LatestSnapshot() (*VersionInfo, error) {
+func (vM VersionManifest) LatestSnapshot() (VersionInfo, error) {
 	return vM.Version(vM.Latest.Snapshot)
 }
 
 // Version fetches a version by id.
-func (vM *VersionManifest) Version(id string) (*VersionInfo, error) {
+func (vM VersionManifest) Version(id string) (VersionInfo, error) {
+	version := versionPool.Get().(VersionInfo)
 	for _, v := range vM.Versions {
 		if v.Id == id {
-			version := versionPool.Get().(*VersionInfo)
-			if err := vM.getJSON(v.URL, version); err != nil {
-				return nil, err
+			if err := vM.getJSON(v.URL, &version); err != nil {
+				return version, err
 			}
 			versionPool.Put(version)
 			return version, nil
 		}
 	}
-	return nil, fmt.Errorf("version %s not found", id)
+	versionPool.Put(version)
+	return version, fmt.Errorf("version %s not found", id)
 }
 
 // AllVersions returns all versions.
-func (vM *VersionManifest) AllVersions() ([]*VersionInfo, error) {
+func (vM VersionManifest) AllVersions() ([]VersionInfo, error) {
 	errs, ctx := errgroup.WithContext(context.Background())
 	errs.SetLimit(runtime.NumCPU())
-	results := make(chan *VersionInfo, len(vM.Versions))
+	results := make(chan VersionInfo, len(vM.Versions))
 
 	// iterate over manifest versions
 	for _, v := range vM.Versions {
@@ -103,7 +112,7 @@ func (vM *VersionManifest) AllVersions() ([]*VersionInfo, error) {
 		close(results)
 	}()
 
-	versions := make([]*VersionInfo, 0, len(vM.Versions))
+	versions := make([]VersionInfo, 0, len(vM.Versions))
 	// wait for all fetches to finish
 	for r := range results {
 		versions = append(versions, r)
@@ -197,38 +206,35 @@ type VersionInfo struct {
 }
 
 // AllVersions returns all versions.
-func AllVersions() ([]*VersionInfo, error) {
+func AllVersions() ([]VersionInfo, error) {
 	return globalManifest().AllVersions()
 }
 
 // LatestRelease returns the latest release.
-func LatestRelease() (*VersionInfo, error) {
+func LatestRelease() (VersionInfo, error) {
 	return globalManifest().LatestRelease()
 }
 
 // LatestSnapshot returns the latest snapshot.
-func LatestSnapshot() (*VersionInfo, error) {
+func LatestSnapshot() (VersionInfo, error) {
 	return globalManifest().LatestSnapshot()
 }
 
 // Version returns a version by id.
-func Version(id string) (*VersionInfo, error) {
+func Version(id string) (VersionInfo, error) {
 	return globalManifest().Version(id)
 }
 
 // Manifest returns the manifest of all versions.
-func Manifest() (*VersionManifest, error) {
+func Manifest() (VersionManifest, error) {
 	var versionManifest VersionManifest
 	err := getJSON("https://launchermeta.mojang.com/mc/game/version_manifest.json", &versionManifest)
-	if err != nil {
-		return nil, err
-	}
-	return &versionManifest, nil
+	return versionManifest, err
 }
 
-func (vM *VersionManifest) getJSON(url string, v interface{}) error {
-	if vM.err != nil {
-		return vM.err
+func (vM VersionManifest) getJSON(url string, v interface{}) error {
+	if gManifestErr != nil {
+		return gManifestErr
 	}
 	return getJSON(url, v)
 }
@@ -244,7 +250,7 @@ func getJSON(url string, v interface{}) error {
 	if resp.Header.Get("Content-Type") != "application/json" {
 		return fmt.Errorf("%s: unexpected content type: %s", url, resp.Header.Get("Content-Type"))
 	}
-	if err := json.NewDecoder(resp.Body).Decode(v); err != nil {
+	if err = json.NewDecoder(resp.Body).Decode(v); err != nil {
 		return err
 	}
 	return resp.Body.Close()
@@ -252,13 +258,13 @@ func getJSON(url string, v interface{}) error {
 
 // globalManifest is a small helper function that
 // returns the global manifest if it has been loaded,
-// otherwise it loads it, and then manifest.
-func globalManifest() *VersionManifest {
-	if !gManifest.loaded {
+// otherwise it loads it, and then returns the manifest.
+func globalManifest() VersionManifest {
+	if !isLoaded {
 		var err error
 		gManifest, err = Manifest()
-		gManifest.err = err
-		gManifest.loaded = true
+		gManifestErr = err
+		isLoaded = true
 		return gManifest
 	}
 	return gManifest

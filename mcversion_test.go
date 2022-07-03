@@ -105,14 +105,23 @@ func Test_MCVersion(t *testing.T) {
 			t.Fatalf("failed to load manifest: %v", err)
 		}
 		// t.Log(m)
-		if m == nil || len(m.Versions) == 0 {
+		if len(m.Versions) == 0 {
 			t.Error("no versions found")
 		}
+		t.Run("ManifestInfo", func(t *testing.T) {
+			for _, v := range m.Versions {
+				_, err := v.Info()
+				if err != nil {
+					t.Errorf("failed to load info for %s: %v", v.Id, err)
+				}
+			}
+		})
 		t.Run("Error", func(t *testing.T) {
-			m.err = fmt.Errorf("test error")
+			gManifestErr = fmt.Errorf("test error")
 			if _, err := m.AllVersions(); err == nil {
 				t.Error("expected error")
 			}
+			gManifestErr = nil
 		})
 	})
 	t.Run("AllVersions", func(t *testing.T) {
@@ -165,7 +174,6 @@ func Test_MCVersion(t *testing.T) {
 
 func Benchmark_MCVersion(b *testing.B) {
 	b.Run("Manifest", func(b *testing.B) {
-		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
 			_, err := Manifest()
 			if err != nil {
@@ -174,13 +182,13 @@ func Benchmark_MCVersion(b *testing.B) {
 		}
 	})
 	b.Run("AllVersions", func(b *testing.B) {
-		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
 			_, err := AllVersions()
 			if err != nil {
 				b.Error(err)
 			}
 		}
+
 	})
 	b.Run("VersionInfo", func(b *testing.B) {
 		for i := 0; i < b.N; i++ {
