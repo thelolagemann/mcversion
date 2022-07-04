@@ -1,9 +1,10 @@
 # mcversion
 
-![GitHub release (latest SemVer including pre-releases)](https://img.shields.io/github/v/release/thelolagemann/mcversion?include_prereleases&style=for-the-badge)
+![GitHub tag (latest SemVer pre-release)](https://img.shields.io/github/v/tag/thelolagemann/mcversion?include_prereleases&label=release&style=for-the-badge)
 [![Go Doc](https://img.shields.io/badge/godoc-reference-blue.svg?style=for-the-badge)](https://pkg.go.dev/github.com/thelolagemann/mcversion)
 ![GitHub go.mod Go version](https://img.shields.io/github/go-mod/go-version/thelolagemann/mcversion?style=for-the-badge)
 ![GitHub Workflow Status](https://img.shields.io/github/workflow/status/thelolagemann/mcversion/Test?label=tests&style=for-the-badge)
+![GitHub Workflow Status](https://img.shields.io/github/workflow/status/thelolagemann/mcversion/CodeQL?label=CodeQL&style=for-the-badge)
 [![Go ReportCard](https://goreportcard.com/badge/github.com/thelolagemann/mcversion?style=for-the-badge)](https://goreportcard.com/report/thelolagemann/mcversion)
 
 > A small golang library to access the minecraft version API.
@@ -26,11 +27,11 @@ import (
 )
 
 func main() {
-	version, err := mcversion.Version("1.12.2")
-	if err != nil {
-		panic(err)
+	manifest, _ := mcversion.Manifest()
+	
+	for _, version := range manifest.Versions {
+		fmt.Println(version.Id)
 	}
-	fmt.Println(version.Name)
 }
 
 ```
